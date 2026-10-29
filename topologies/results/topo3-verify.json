@@ -1,0 +1,104 @@
+{
+  "topology": "verify",
+  "agents": 16,
+  "raw": 10,
+  "rejected": [
+    {
+      "file": "shop/orders.py",
+      "line": 26,
+      "description": "If reserving any line raises (e.g. not enough stock), the lines already reserved are never released, which breaks the docstring's promise that either every line is reserved or none are.",
+      "verdict": {
+        "real": false,
+        "reason": "The partial-reservation leak cannot happen as the code stands. orders.py:26 calls inventory.reserve(line.qty, line.sku), but the signature is reserve(sku, qty), so the arguments are swapped. Inside reserve, qty is the SKU string and sku is the int quantity. available(int) returns a number, so the check `qty >= self.available(sku)` compares a str with an int and raises TypeError on the very first line, before self.reserved is touched. No line is ever reserved, so there is nothing left to release, and \"either every line is reserved or none are\" holds trivially. The missing rollback would only become a real leak once the argument order is fixed. The bug you can actually trigger is the swapped arguments: any non-empty cart makes place_order raise TypeError."
+      }
+    }
+  ],
+  "findings": [
+    {
+      "file": "shop/cart.py",
+      "line": 27,
+      "description": "remove_sku calls self.lines.remove() while iterating over self.lines, so the element after each removed line is skipped; two adjacent lines with the same SKU leave one behind, which breaks the docstring's promise to remove every line for that SKU.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. Cart.add merges lines that share a SKU, so carts built only through add() never trigger the bug. But `lines` is a public dataclass field. I ran `Cart([Line('a',1,1), Line('a',1,1)]).remove_sku('a')` and one line was left: `[Line(sku='a', unit_cents=1, qty=1)]`. The cause is that `list.remove` during the `for` loop shifts the next element into the current index, so the loop skips it. That breaks the docstring's promise to \"Remove every line for this SKU\". The same thing happens if a caller appends to `cart.lines` directly."
+      }
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 13,
+      "description": "is_valid uses strict '<' so a discount is rejected on its expires_on date, contradicting the comment that it is valid through that date inclusive (should be '<=').",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. The comment on line 10 of discounts.py says expires_on is \"valid through this date, inclusive\", but line 13 returns `today < self.expires_on`. Concrete failure: Discount(\"X\", 10, date(2026,1,1)).is_valid(date(2026,1,1)) returns False, so best_discount skips the code on its last valid day. The fix is `<=`. The file is at the package root (review/shop/discounts.py), not under a nested shop/ folder."
+      }
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 25,
+      "description": "best_discount applies every valid discount in sequence (stacking them) instead of choosing the single best one, contradicting its docstring that discounts never stack; it should compute min(d.apply(cents)) over valid discounts.",
+      "verdict": {
+        "real": true,
+        "reason": "Confirmed. In discounts.py lines 22-26, the loop feeds each discount the total left by the previous one (total = d.apply(total)), so every valid discount is applied in turn. The docstring says \"Apply the single best valid discount. Discounts never stack.\" Example: best_discount(10000, [Discount('A',10,date(2099,1,1)), Discount('B',20,date(2099,1,1))], date(2026,1,1)) returns 10000*0.9=9000, then 9000*0.8=7200. The single best discount gives 8000. orders.py line 27 uses this result as the order total, so customers get stacked discounts. The fix is to return min([cents] + [d.apply(cents) for d in discounts if d.is_valid(today)]). Separately, is_valid uses today < expires_on even though the comment says the code is valid through that date inclusive. That is a second bug: a code stops working one day early."
+      }
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 18,
+      "description": "The check `qty >= self.available(sku)` rejects a reservation of exactly all available units, which the docstring says is allowed; it should be `qty > self.available(sku)`.",
+      "verdict": {
+        "real": true,
+        "reason": "I couldn't refute it. In /tmp/claude-0/-home-claude/13a91836-72c4-512e-b187-cc0d03efed4f/scratchpad/review/shop/inventory.py, the docstring of reserve() on line 17 says \"Reserving exactly all available units is allowed\", but line 18 is `if qty >= self.available(sku): raise OutOfStock(sku)`. Concrete failing call: `Inventory({\"a\": 5}).reserve(\"a\", 5)`. Here available(\"a\") is 5, the test 5 >= 5 is true, and OutOfStock is raised, although the docstring says this reservation is allowed. Changing the check to `qty > self.available(sku)` fixes it. I found this by reading the code, not by running it. Separately, orders.py line 26 calls `inventory.reserve(line.qty, line.sku)` with the two arguments swapped. That is a different bug and does not affect this finding."
+      }
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 9,
+      "description": "The mutable default `stock={}` is shared by every Inventory created without an argument, so restock() on one instance changes the stock of all the others (the caller's dict is also stored and mutated without a copy).",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute this. In /tmp/claude-0/-home-claude/13a91836-72c4-512e-b187-cc0d03efed4f/scratchpad/review/shop/inventory.py, line 9 is `def __init__(self, stock: dict[str, int] = {})` and line 10 stores that object with `self.stock = stock`, without copying it. restock() (line 30) then writes into that same dict. Concrete input: `a = Inventory(); a.restock(\"x\", 5); b = Inventory(); b.available(\"x\")` returns 5 when it should return 0, because a and b share the single default dict. The second half of the claim also holds: `d = {\"x\": 1}; Inventory(d).restock(\"x\", 2)` changes the caller's d to {\"x\": 3}. Nothing in the package works around this. orders.py only takes an Inventory as a parameter and never creates one."
+      }
+    },
+    {
+      "file": "shop/money.py",
+      "line": 6,
+      "description": "int(amount * 100) truncates float error instead of rounding, e.g. to_cents(19.99) returns 1998 (or 0.29 -> 28), contradicting the docstring's 19.99 -> 1999.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. In money.py, to_cents does `return int(amount * 100)`. I ran it: 19.99*100 is 1998.9999999999998, so to_cents(19.99) returns 1998, while the docstring says \"19.99 to integer cents (1999)\". Likewise to_cents(0.29) returns 28, not 29. int() cuts off the decimal part instead of rounding, so the float error becomes a missing cent. The fix is to round, for example int(round(amount * 100)), or to use Decimal."
+      }
+    },
+    {
+      "file": "shop/money.py",
+      "line": 29,
+      "description": "The remainder cents // parts is never distributed, so shares do not add up to `cents` when it is not divisible (e.g. split_evenly(100, 3) -> [33, 33, 33] sums to 99), contradicting the docstring.",
+      "verdict": {
+        "real": true,
+        "reason": "I couldn't refute the bug. split_evenly in /tmp/claude-0/-home-claude/13a91836-72c4-512e-b187-cc0d03efed4f/scratchpad/review/shop/money.py returns [cents // parts] * parts and never hands out the cents % parts remainder. So split_evenly(100, 3) returns [33, 33, 33], which sums to 99. The docstring promises shares that \"add up exactly to `cents`\" and says \"The first shares absorb any remainder, one cent each\", so the expected result is [34, 33, 33]."
+      }
+    },
+    {
+      "file": "shop/orders.py",
+      "line": 26,
+      "description": "inventory.reserve is called as (qty, sku), but cancel_order calls inventory.release(sku, qty); the arguments here look swapped, so the quantity would be passed as the SKU and the SKU as the quantity.",
+      "verdict": {
+        "real": true,
+        "reason": "Inventory.reserve is defined as reserve(self, sku: str, qty: int) in inventory.py:16, but orders.py:26 calls inventory.reserve(line.qty, line.sku), so the arguments are swapped. cancel_order calls release(line.sku, line.qty), which is the right order. Concrete failure: with inv = Inventory({\"A\": 10}) and a cart line of sku \"A\", qty 2, place_order calls reserve(2, \"A\"). Then available(2) returns 0, because 2 is not a stock key, and the check `\"A\" >= 0` raises TypeError (str vs int). So every order fails. If the values happened to be comparable, the reservation would instead be recorded under the qty as the key, and stock would never be reserved for the real SKU."
+      }
+    },
+    {
+      "file": "shop/utils.py",
+      "line": 7,
+      "description": "The check `value < 0` lets 0 through, but the docstring and error message say the quantity must be at least 1. The condition should be `value < 1`.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. In utils.py, parse_qty(\"0\") returns 0, but its docstring says the value \"Must be a whole number of at least 1\" and its error message says \"quantity must be at least 1\". The check `value < 0` only rejects negative numbers, so 0 gets through, which contradicts both. Nothing in the package calls parse_qty, so no caller rejects 0 later and nothing depends on 0 being accepted. The fix is `value < 1`."
+      }
+    }
+  ],
+  "usage": {
+    "subagent_tokens": 862318,
+    "duration_ms": 108192,
+    "agents": 16
+  }
+}

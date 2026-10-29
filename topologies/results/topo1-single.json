@@ -1,0 +1,61 @@
+{
+  "topology": "single",
+  "agents": 1,
+  "findings": [
+    {
+      "file": "shop/cart.py",
+      "line": 27,
+      "description": "remove_sku removes items from self.lines while iterating over it, so the element after each removed line is skipped and adjacent lines for the same SKU are not all removed, contrary to the docstring."
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 13,
+      "description": "is_valid uses today < expires_on, so a discount is rejected on its expiry date although the comment says it is valid through that date inclusive."
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 25,
+      "description": "best_discount applies every valid discount in sequence (stacking them) instead of choosing the single best one, contradicting its docstring."
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 9,
+      "description": "The mutable default argument stock={} is shared across all Inventory instances, so restocking one default-constructed inventory changes the stock of every other one."
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 18,
+      "description": "reserve raises OutOfStock when qty equals the available amount (>= instead of >), although the docstring says reserving exactly all available units is allowed."
+    },
+    {
+      "file": "shop/money.py",
+      "line": 6,
+      "description": "int(amount * 100) truncates floating-point error, so to_cents(19.99) returns 1998 instead of 1999; it should round."
+    },
+    {
+      "file": "shop/money.py",
+      "line": 29,
+      "description": "split_evenly returns parts copies of cents // parts and drops the remainder, so the shares do not add up to cents (e.g. 100 split 3 ways gives 99), contrary to the docstring."
+    },
+    {
+      "file": "shop/orders.py",
+      "line": 26,
+      "description": "inventory.reserve is called with arguments swapped (qty, sku) instead of (sku, qty), so the quantity is used as the SKU key and the SKU string as the quantity, which fails or reserves the wrong item."
+    },
+    {
+      "file": "shop/orders.py",
+      "line": 25,
+      "description": "If a reservation fails partway through the loop, earlier lines stay reserved because nothing releases them, violating the docstring's 'either every line is reserved or none are'."
+    },
+    {
+      "file": "shop/utils.py",
+      "line": 7,
+      "description": "parse_qty checks value < 0, so a quantity of 0 is accepted although the docstring and error message require at least 1."
+    }
+  ],
+  "usage": {
+    "subagent_tokens": 55854,
+    "duration_ms": 16828,
+    "agents": 1
+  }
+}
