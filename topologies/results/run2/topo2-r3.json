@@ -1,0 +1,119 @@
+{
+  "topology": "fanout",
+  "agents": 8,
+  "raw": 14,
+  "findings": [
+    {
+      "file": "logi/util/retry.py",
+      "line": 18,
+      "description": "range(1, attempts) makes only attempts-1 calls instead of `attempts` in total; with attempts=1 the function is never called and `raise last` raises None, which gives a TypeError."
+    },
+    {
+      "file": "logi/util/timeutil.py",
+      "line": 41,
+      "description": "The loop counts `start` and leaves out `end`, the opposite of the docstring's 'after start up to and including end'; for example Saturday to Monday returns 0 instead of 1, and Monday to Tuesday counts Monday instead of Tuesday."
+    },
+    {
+      "file": "logi/geo/distance.py",
+      "line": 13,
+      "description": "For antipodal or nearly antipodal points, floating-point rounding can push `a` slightly above 1, and then math.asin(math.sqrt(a)) raises ValueError (math domain error) instead of returning about 20015 km; clamping with min(1.0, ...) would prevent this."
+    },
+    {
+      "file": "logi/catalog/search.py",
+      "line": 27,
+      "description": "search_many deduplicates with list(set(found)), which throws away the order the products were found in, so the docstring's promise that results keep first-found order (best match for the first query first) does not hold, and the [:limit] cut can drop the wrong products."
+    },
+    {
+      "file": "logi/pricing/quote.py",
+      "line": 22,
+      "description": "The VAT rate is divided by 100 before being passed to tax.apply_vat, which expects a percentage (0-100), so 21% NL VAT is applied as 0.21% and gross is nearly equal to net."
+    },
+    {
+      "file": "logi/pricing/discounts.py",
+      "line": 13,
+      "description": "applies_to uses a strict '>' but the field comment says the discount applies to baskets of at least min_basket_cents, so a basket exactly at the threshold gets no discount."
+    },
+    {
+      "file": "logi/pricing/money.py",
+      "line": 18,
+      "description": "Python's round() rounds half to even, so exact half-cent results round down half the time (e.g. 5% of 50 cents = 2.5 -> 2), unlike the half-away-from-zero rounding used elsewhere in the module, and the float division can also lose precision on large amounts."
+    },
+    {
+      "file": "logi/shipping/label.py",
+      "line": 21,
+      "description": "parcels.total_weight returns grams but rates.rate_for expects kilograms, so postage is computed on a weight 1000x too large and almost any parcel over 30 g raises FreightRequired."
+    },
+    {
+      "file": "logi/shipping/eta.py",
+      "line": 13,
+      "description": "geocode.locate's result is unpacked as (lon, lat), while label.py unpacks the same call as (lat, lon); the two disagree, so one of them passes swapped coordinates to zones.zone_for(lat, lon). label.py's order matches zone_for's (lat, lon) signature, so eta.py is the likely one that picks the wrong zone and transit time."
+    },
+    {
+      "file": "logi/orders/repo.py",
+      "line": 24,
+      "description": "page is never checked against the documented 1-based numbering: page=0 yields start=-size and returns an empty slice, and a negative page gives negative indexes that silently return orders from the end of the list instead of raising."
+    },
+    {
+      "file": "logi/orders/service.py",
+      "line": 30,
+      "description": "The caller's lines list is stored on the Order as-is, not copied, so if the caller later changes that list, the stored order's lines change too and no longer match its priced gross_cents."
+    },
+    {
+      "file": "logi/reports/csv_export.py",
+      "line": 15,
+      "description": "Fields are joined with bare commas and never quoted or escaped, contradicting the RFC 4180 docstring: a city or the '; '-joined items (or a formatted EUR amount like '1,50') containing a comma or quote corrupts the column layout."
+    },
+    {
+      "file": "logi/reports/daily.py",
+      "line": 19,
+      "description": "revenue // len(todays) raises ZeroDivisionError on a day with no orders, while the field comment says average_cents should be 0 in that case."
+    },
+    {
+      "file": "logi/reports/listing.py",
+      "line": 14,
+      "description": "orders.sort() sorts the list returned by repo.all_orders() in place; if the repo returns its internal list, this reorders the repository's stored orders as a side effect for every other caller."
+    }
+  ],
+  "usage": {
+    "agents": 8,
+    "tokens": 430898,
+    "wall_clock_s": 52.9
+  },
+  "score": {
+    "found": [
+      "L1",
+      "L2",
+      "L3",
+      "L4",
+      "L5",
+      "L6",
+      "X1",
+      "X2",
+      "X3",
+      "X6"
+    ],
+    "missed": [
+      "X4",
+      "X5"
+    ],
+    "recall": 0.83,
+    "precision": 0.83,
+    "false_positives": [
+      {
+        "file": "logi/pricing/money.py",
+        "line": 18,
+        "description": "Python's round() rounds half to even, so exact half-cent results round down half the time (e.g. 5% of 50 cents = 2.5 -> 2), unlike the half-away-from-zero rounding used elsewhere in the module, and the float division can also lose precision on large amounts."
+      },
+      {
+        "file": "logi/orders/service.py",
+        "line": 30,
+        "description": "The caller's lines list is stored on the Order as-is, not copied, so if the caller later changes that list, the stored order's lines change too and no longer match its priced gross_cents."
+      }
+    ],
+    "duplicates": 0,
+    "bonus_found": [
+      "U1"
+    ],
+    "cross_file_found": 4
+  }
+}

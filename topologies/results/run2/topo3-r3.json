@@ -1,0 +1,157 @@
+{
+  "topology": "verify",
+  "agents": 20,
+  "raw": 13,
+  "rejected": [
+    {
+      "file": "logi/orders/service.py",
+      "line": 30,
+      "description": "create_order stores the caller's own `lines` list in the Order without copying it, so if the caller later changes that list, the stored order's lines change too and no longer match the gross_cents that was priced and validated.",
+      "verdict": {
+        "real": false,
+        "reason": "Nothing inside the package ever changes an order's lines after creation. The only readers are csv_export, and pricing and shipping, which only iterate them, and no code appends to or edits the list passed into create_order. Neither the docstring (\"Validate, price and store a new order\") nor the Order dataclass promises a defensive copy, and storing a reference to a passed-in list is ordinary Python. The claimed failure only happens if outside code mutates its own list after handing it over. That is a hardening suggestion, not a concrete misbehaviour or a contradiction with the documented contract."
+      }
+    }
+  ],
+  "findings": [
+    {
+      "file": "logi/util/retry.py",
+      "line": 18,
+      "description": "range(1, attempts) makes only attempts-1 calls instead of the documented `attempts` total, and with attempts=1 the function is never called and `raise last` raises None (TypeError).",
+      "verdict": {
+        "real": true,
+        "reason": "I couldn't refute it. The docstring says the wrapped function is called \"up to `attempts` times in total\", but the loop is `for attempt in range(1, attempts)`, which runs only attempts-1 times. With the default attempts=3 and a function that always fails, it is called twice, not three times. With attempts=1, which the ValueError guard explicitly allows, the loop body never runs, so the function is never called. `last` stays None, and `raise last` throws \"TypeError: exceptions must derive from BaseException\". The fix is `range(1, attempts + 1)`."
+      }
+    },
+    {
+      "file": "logi/util/timeutil.py",
+      "line": 42,
+      "description": "The loop counts days from start through end-1 rather than the days after start up to and including end, as the docstring says, so e.g. Friday to Saturday returns 1 instead of 0 and Sunday to Monday returns 0 instead of 1.",
+      "verdict": {
+        "real": true,
+        "reason": "In util/timeutil.py, business_days_between checks `current` before moving forward, starting at `start` and stopping before `end`. That counts the days start through end-1, but the docstring says it counts the days after start up to and including end. Two calls show it: business_days_between(Fri 2026-10-30, Sat 2026-10-31) returns 1, because Friday is counted, and the docstring gives 0. business_days_between(Sun 2026-11-01, Mon 2026-11-02) returns 0, and the docstring gives 1. The docstring's own example, Monday to the next Monday equals 5, only works by coincidence, since both ways of counting give 5. The fix is to move forward before checking the day, as add_business_days already does."
+      }
+    },
+    {
+      "file": "logi/geo/distance.py",
+      "line": 13,
+      "description": "For antipodal or nearly antipodal points, rounding can push `a` slightly above 1 (I measured 1.0000000000000002), so math.asin(math.sqrt(a)) raises 'ValueError: math domain error' when it should return about 20015 km; clamping with min(1.0, a) fixes it.",
+      "verdict": {
+        "real": true,
+        "reason": "The bug is real, though the reviewer's number is wrong. At a = 1.0000000000000002, math.sqrt rounds to exactly 1.0 and asin(1.0) works fine; I checked their kind of input and it returns 20015.09 km. A random search over almost-antipodal pairs does push a to 1.0000000000000004, though. At that value sqrt(a) is 1.0000000000000002, which is above 1, so asin raises. Concrete failing call: haversine_km(-59.8801560354761, -161.0238909601651, 59.88015603547605, 18.97610903983572) raises 'ValueError: math domain error' at logi/geo/distance.py line 13. It should return about 20015 km. The search also found other failing pairs, for example (59.72548426979034, -69.2000110331913, -59.72548426979039, 110.79998896680782). Clamping a to at most 1.0 fixes it."
+      }
+    },
+    {
+      "file": "logi/catalog/search.py",
+      "line": 27,
+      "description": "Deduplicating with list(set(found)) throws away the order the products were found in, so the result order is arbitrary. The docstring promises first-found order with the best match for the first query first, and the [:limit] cut can then drop the best matches.",
+      "verdict": {
+        "real": true,
+        "reason": "The bug is real. In search.py, search_many returns list(set(found))[:limit]. Product is a frozen dataclass, so its hash comes from its str fields, and Python randomizes string hashes per process. That makes the order coming out of the set arbitrary and different between runs. The docstring says the opposite: results keep first-found order, with the best match for the first query first. Concrete failure: search_many([\"kettle\", \"mug\"], limit=1) should always return [Electric kettle], but in some processes it returns [Ceramic mug], so the [:limit] cut drops the best match for the first query. Even with no limit cut, search_many([\"kettle\", \"mug\"]) can come back as [mug, kettle]. Fix: return list(dict.fromkeys(found))[:limit]."
+      }
+    },
+    {
+      "file": "logi/pricing/discounts.py",
+      "line": 13,
+      "description": "applies_to uses a strict `>` although the comment says the discount applies to baskets of at least min_basket_cents, so a basket exactly at the threshold gets no discount (should be `>=`).",
+      "verdict": {
+        "real": true,
+        "reason": "The bug is real. The comment on min_basket_cents (line 10) says the discount \"applies to baskets of at least this amount\", but applies_to (line 13) uses a strict `basket_cents > self.min_basket_cents`. Example: BasketDiscount(percent=10, min_basket_cents=5000).applies_to(5000) returns False, so discounted(5000) returns 5000 instead of 5000 minus 10%. The fix is `>=`."
+      }
+    },
+    {
+      "file": "logi/pricing/quote.py",
+      "line": 22,
+      "description": "The VAT rate is divided by 100 before being passed to tax.apply_vat, which expects a percentage (0-100), so 21% VAT gets applied as 0.21% and gross_cents comes out almost equal to net.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. In pricing/quote.py:22, `tax.vat_rate` returns a whole percentage, for example 21 for NL. The code then divides it by 100, giving 0.21, and passes that to `tax.apply_vat`. Both `apply_vat`'s docstring and `money.percent_of` expect a percentage from 0 to 100, and `percent_of` divides by 100 again. For a 10000-cent net with country \"NL\", that gives percent_of(10000, 0.21) = round(21.0) = 21, so gross_cents = 10021 instead of 12100. (The reviewer's path logi/pricing/quote.py does not exist; the file is pricing/quote.py.)"
+      }
+    },
+    {
+      "file": "logi/shipping/eta.py",
+      "line": 13,
+      "description": "The result of geocode.locate is unpacked as (lon, lat), but label.py unpacks the same call as (lat, lon), so here latitude and longitude are swapped before zones.zone_for(lat, lon) and the wrong zone and transit time are used.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. The docstring of geocode.locate says it returns (latitude, longitude), and the gazetteer stores \"amsterdam\" as (52.3676, 4.9041). eta.py unpacks that as `lon, lat = point`, which gives lat=4.9041 and lon=52.3676. It then calls zones.zone_for(4.9041, 52.3676). No zone has a latitude range that includes 4.9, so the call raises ValueError(\"no delivery zone ...\") when it should return BENELUX with 1 transit day. The same happens for every city in the gazetteer, so estimate_delivery(date.today(), \"amsterdam\") fails. label.py and orders/service.py unpack the same call correctly as `lat, lon`."
+      }
+    },
+    {
+      "file": "logi/shipping/label.py",
+      "line": 21,
+      "description": "parcels.total_weight returns grams, but rates.rate_for expects kilograms, so postage is about 1000 times too high and any parcel over 30 g wrongly raises FreightRequired.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. parcels.total_weight's docstring says it returns grams, and it sums Product.weight_g (marked \"# grams\"). label.py line 21 passes that number straight to rates.rate_for(weight_kg, ...), whose docstring says it takes kilograms. Nothing converts it with units.grams_to_kg. Concrete failure: make_label(\"o1\", <known city>, [(\"MUG\", 1)]) sends 350 to rate_for. Since 350 > FREIGHT_LIMIT_KG (30), it raises FreightRequired for a 0.35 kg parcel. Any parcel over 30 g that stays under the limit, such as one weighing exactly 30 g, would be charged per-kg postage on 1000 times its real weight."
+      }
+    },
+    {
+      "file": "logi/orders/repo.py",
+      "line": 24,
+      "description": "list_orders does not reject page < 1 even though pages are numbered from 1: page=0 silently returns an empty list, and a negative page produces negative slice indices that return orders counted from the end of the list (for example page=-1, size=20 returns _ORDERS[-40:-20]) instead of raising an error.",
+      "verdict": {
+        "real": true,
+        "reason": "I could not refute it. In logi/orders/repo.py, list_orders checks only that size is at least 1. It never checks page, even though its docstring says \"Pages are numbered from 1\". With 50 orders: list_orders(page=0, size=20) computes _ORDERS[-20:0] and returns an empty list. list_orders(page=-1, size=20) computes _ORDERS[-40:-20] and returns orders 10 to 29, a slice counted from the end, when it should raise. A bad size raises ValueError, but a bad page fails silently. This is reachable today: reports/listing.py first_page() calls repo.list_orders(page=0, size=size) and always gets an empty list instead of an error. That caller has its own bug, but even with it fixed the repo would still accept page values below 1."
+      }
+    },
+    {
+      "file": "logi/reports/csv_export.py",
+      "line": 15,
+      "description": "Fields are joined with bare commas and never quoted or escaped, so a city or items value containing a comma, quote or newline produces broken CSV, which contradicts the docstring's promise of RFC 4180 quoting; non-str fields such as an int order_id would also make ','.join raise TypeError.",
+      "verdict": {
+        "real": true,
+        "reason": "The bug is real. to_csv (reports/csv_export.py:15) joins fields with a bare \",\".join and never quotes or escapes anything, but its docstring says fields are \"quoted per RFC 4180 so commas and quotes in fields are safe\". A concrete failing input: an Order with city=\"Washington, D.C.\" becomes the row `A1,Washington, D.C.,...`, which has 6 fields instead of 5. A city or SKU containing `\"` or a newline also breaks the row. The TypeError part of the claim is weaker: Order.order_id is typed str, and items, format_eur and isoformat all return str, so it only happens if a caller breaks that type. The quoting defect alone makes the claim real."
+      }
+    },
+    {
+      "file": "logi/reports/daily.py",
+      "line": 19,
+      "description": "revenue // len(todays) raises ZeroDivisionError on a day with no orders, though the field comment says average_cents should be 0 in that case.",
+      "verdict": {
+        "real": true,
+        "reason": "daily_summary(day) for any date with no matching orders (e.g. an empty repo, or a day before the first order) builds todays = [], so revenue // len(todays) evaluates 0 // 0 and raises ZeroDivisionError. The field comment on DailySummary.average_cents says it should be 0 when there were no orders. There is no guard in the code."
+      }
+    },
+    {
+      "file": "logi/reports/listing.py",
+      "line": 14,
+      "description": "orders.sort() sorts the list returned by repo.all_orders() in place; if the repo hands back its internal list, this silently reorders the repository's storage and breaks other callers that expect creation order (such as the 'oldest first' listing).",
+      "verdict": {
+        "real": true,
+        "reason": "The reviewer is right. In orders/repo.py, all_orders() returns the module-level _ORDERS list itself, not a copy, and its docstring says \"Callers must not modify it.\" biggest_orders() in reports/listing.py calls .sort() on that list, so it reorders the repository's storage in place. To reproduce: repo.add(A, gross 100), repo.add(B, gross 500), then call biggest_orders(). After that, repo.list_orders(page=1) and first_page() (once its page=0 bug is fixed) return [B, A] instead of the documented oldest-first [A, B]. repo.find() and daily.py also see the reordered list. The fix is to sort a copy, e.g. sorted(repo.all_orders(), key=..., reverse=True)."
+      }
+    }
+  ],
+  "usage": {
+    "agents": 20,
+    "tokens": 1094412,
+    "wall_clock_s": 160.6
+  },
+  "score": {
+    "found": [
+      "L1",
+      "L2",
+      "L3",
+      "L4",
+      "L5",
+      "L6",
+      "X1",
+      "X2",
+      "X3",
+      "X6"
+    ],
+    "missed": [
+      "X4",
+      "X5"
+    ],
+    "recall": 0.83,
+    "precision": 1.0,
+    "false_positives": [],
+    "duplicates": 0,
+    "bonus_found": [
+      "U1"
+    ],
+    "cross_file_found": 4
+  }
+}

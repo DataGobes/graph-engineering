@@ -1,0 +1,148 @@
+{
+  "target": "target-v2",
+  "bugs": [
+    {
+      "id": "L1",
+      "file": "logi/util/timeutil.py",
+      "anchors": [
+        "while current < end:"
+      ],
+      "kind": "local",
+      "summary": "business_days_between counts start and excludes end; docstring says after start, up to and including end (Sat to Mon gives 0, should be 1)."
+    },
+    {
+      "id": "L2",
+      "file": "logi/util/retry.py",
+      "anchors": [
+        "for attempt in range(1, attempts):"
+      ],
+      "kind": "local",
+      "summary": "Tries attempts-1 times; attempts=1 never calls fn and raises None."
+    },
+    {
+      "id": "L3",
+      "file": "logi/catalog/search.py",
+      "anchors": [
+        "return list(set(found))[:limit]"
+      ],
+      "kind": "local",
+      "summary": "set() loses first-found order the docstring promises."
+    },
+    {
+      "id": "L4",
+      "file": "logi/pricing/discounts.py",
+      "anchors": [
+        "return basket_cents > self.min_basket_cents"
+      ],
+      "kind": "local",
+      "summary": "Comment says at least the minimum, code requires strictly more."
+    },
+    {
+      "id": "L5",
+      "file": "logi/reports/daily.py",
+      "anchors": [
+        "revenue // len(todays)"
+      ],
+      "kind": "local",
+      "summary": "ZeroDivisionError on a day with no orders; field comment says average is 0."
+    },
+    {
+      "id": "L6",
+      "file": "logi/reports/csv_export.py",
+      "anchors": [
+        "return \"\\r\\n\".join(\",\".join(row) for row in rows)"
+      ],
+      "kind": "local",
+      "summary": "No RFC 4180 quoting although the docstring promises it; a comma in a city breaks the row."
+    },
+    {
+      "id": "X1",
+      "file": "logi/pricing/quote.py",
+      "anchors": [
+        "rate = tax.vat_rate(country) / 100"
+      ],
+      "kind": "cross-file",
+      "summary": "apply_vat expects a percentage (21), quote passes a fraction (0.21), so VAT is ~0."
+    },
+    {
+      "id": "X2",
+      "file": "logi/shipping/label.py",
+      "anchors": [
+        "postage = rates.rate_for(weight, zone.code)",
+        "weight = parcels.total_weight(lines)"
+      ],
+      "kind": "cross-file",
+      "summary": "total_weight returns grams, rate_for expects kilograms; every parcel looks 1000x heavier."
+    },
+    {
+      "id": "X3",
+      "file": "logi/shipping/eta.py",
+      "anchors": [
+        "lon, lat = point"
+      ],
+      "kind": "cross-file",
+      "summary": "locate returns (lat, lon); eta unpacks it as (lon, lat), so zone lookup fails for every city."
+    },
+    {
+      "id": "X4",
+      "file": "logi/orders/service.py",
+      "anchors": [
+        "lat, lon = geocode.locate(city)"
+      ],
+      "kind": "cross-file",
+      "summary": "locate returns None for unknown cities; create_order unpacks it unchecked and crashes with TypeError."
+    },
+    {
+      "id": "X5",
+      "file": "logi/reports/listing.py",
+      "anchors": [
+        "return repo.list_orders(page=0, size=size)"
+      ],
+      "kind": "cross-file",
+      "summary": "list_orders pages are 1-based; page=0 returns an empty list for the first page."
+    },
+    {
+      "id": "X6",
+      "file": "logi/reports/listing.py",
+      "anchors": [
+        "orders.sort(key=lambda o: o.gross_cents, reverse=True)",
+        "orders = repo.all_orders()"
+      ],
+      "kind": "cross-file",
+      "summary": "all_orders returns the repository's own list; sorting it in place reorders the repository."
+    }
+  ],
+  "neutral": [
+    {
+      "file": "logi/shipping/label.py",
+      "anchors": [
+        "lat, lon = geocode.locate(city)"
+      ],
+      "summary": "No None check, but the docstring makes a known city a precondition. Neither credited nor penalized."
+    },
+    {
+      "file": "logi/pricing/money.py",
+      "anchors": [
+        "return sign * int(abs(amount) * 100 + 0.5)"
+      ],
+      "summary": "Float edge cases such as 1.005 round down because 1.005 is stored as 1.00499...; debatable, neither credited nor penalized."
+    },
+    {
+      "file": "logi/orders/repo.py",
+      "anchors": [
+        "start = (page - 1) * size"
+      ],
+      "summary": "list_orders does not reject page < 1. Defensible hardening, and it is the callee side of X5, but it does not find the caller's page=0; neither credited nor penalized."
+    }
+  ],
+  "bonus": [
+    {
+      "id": "U1",
+      "file": "logi/geo/distance.py",
+      "anchors": [
+        "return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))"
+      ],
+      "summary": "Not seeded: near-antipodal points push a above 1.0 and asin raises a math domain error. Found by agents in run 2; confirmed with haversine_km(-59.659075, 121.873209, 59.659074, -58.126792)."
+    }
+  ]
+}
