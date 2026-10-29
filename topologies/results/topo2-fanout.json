@@ -1,0 +1,62 @@
+{
+  "topology": "fanout",
+  "agents": 7,
+  "raw": 10,
+  "findings": [
+    {
+      "file": "shop/cart.py",
+      "line": 27,
+      "description": "remove_sku removes items from self.lines while iterating over it, so the element right after each removed line is skipped; when two adjacent lines share the SKU, one survives, which contradicts the docstring's promise to remove every line for that SKU."
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 13,
+      "description": "is_valid uses `today < self.expires_on`, so a discount is rejected on its expiry date even though the comment says it is valid through that date inclusive; it should be `<=`."
+    },
+    {
+      "file": "shop/discounts.py",
+      "line": 25,
+      "description": "best_discount applies every valid discount in turn, so they stack. The docstring says discounts never stack and only the single best one applies, so the loop should pick the minimum of d.apply(cents)."
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 18,
+      "description": "The check `qty >= self.available(sku)` raises OutOfStock when qty equals the available units, which contradicts the docstring saying reserving exactly all available units is allowed; it should be `qty > ...`."
+    },
+    {
+      "file": "shop/inventory.py",
+      "line": 9,
+      "description": "The mutable default `stock={}` is created once and shared by every Inventory built without an argument, so restocking one such instance changes the stock of all the others."
+    },
+    {
+      "file": "shop/money.py",
+      "line": 6,
+      "description": "int(amount * 100) truncates rather than rounds, so float error gives wrong cents, e.g. to_cents(19.99) returns 1998 and to_cents(0.29) returns 28 instead of 1999 and 29."
+    },
+    {
+      "file": "shop/money.py",
+      "line": 29,
+      "description": "The remainder is dropped and never handed out to the first shares, so the result does not add up to `cents` when it is not divisible by `parts` (split_evenly(100, 3) gives [33, 33, 33], which sums to 99), contradicting the docstring."
+    },
+    {
+      "file": "shop/orders.py",
+      "line": 26,
+      "description": "inventory.reserve is called as reserve(line.qty, line.sku), but release on line 36 is called as release(line.sku, line.qty); the arguments to reserve look swapped, so the wrong SKU and quantity get reserved."
+    },
+    {
+      "file": "shop/orders.py",
+      "line": 25,
+      "description": "The docstring says either every line is reserved or none are, but if reserve raises partway through the loop (for example, out of stock), the lines already reserved are never released, so the reservation is left half done."
+    },
+    {
+      "file": "shop/utils.py",
+      "line": 7,
+      "description": "The check `value < 0` lets 0 through, but the docstring and the error message both say the quantity must be at least 1, so it should be `value < 1`."
+    }
+  ],
+  "usage": {
+    "subagent_tokens": 370056,
+    "duration_ms": 39095,
+    "agents": 7
+  }
+}
