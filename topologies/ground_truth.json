@@ -1,0 +1,28 @@
+{
+  "bugs": [
+    {"id": "B01", "file": "shop/money.py", "anchor": "return int(amount * 100)", "kind": "local",
+     "summary": "Float truncation: to_cents(19.99) returns 1998, should round."},
+    {"id": "B02", "file": "shop/money.py", "anchor": "return [share] * parts", "kind": "local",
+     "summary": "split_evenly drops the remainder, shares do not add up to the total."},
+    {"id": "B03", "file": "shop/inventory.py", "anchor": "def __init__(self, stock: dict[str, int] = {}):", "kind": "local",
+     "summary": "Mutable default dict is shared across Inventory instances."},
+    {"id": "B04", "file": "shop/inventory.py", "anchor": "if qty >= self.available(sku):", "kind": "local",
+     "summary": "Off by one: reserving exactly all available units raises, docstring says it is allowed."},
+    {"id": "B05", "file": "shop/cart.py", "anchor": "self.lines.remove(line)", "kind": "local",
+     "summary": "Removes from a list while iterating it, skips adjacent matching lines."},
+    {"id": "B06", "file": "shop/discounts.py", "anchor": "return today < self.expires_on", "kind": "local",
+     "summary": "Expiry is inclusive per the field comment, comparison should be <=."},
+    {"id": "B07", "file": "shop/discounts.py", "anchor": "total = d.apply(total)", "kind": "local",
+     "summary": "best_discount stacks every valid discount, docstring says pick the single best."},
+    {"id": "B08", "file": "shop/utils.py", "anchor": "if value < 0:", "kind": "local",
+     "summary": "parse_qty accepts 0, must be at least 1."},
+    {"id": "B09", "file": "shop/orders.py", "anchor": "inventory.reserve(line.qty, line.sku)", "kind": "cross-file",
+     "summary": "Arguments swapped: Inventory.reserve takes (sku, qty)."},
+    {"id": "B10", "file": "shop/orders.py", "anchor": "for line in cart.lines:", "kind": "cross-file",
+     "summary": "No rollback: if a later line is out of stock, earlier reservations are never released (all-or-none promised)."}
+  ],
+  "neutral": [
+    {"file": "shop/cart.py", "anchor": "line.qty += qty",
+     "summary": "add() ignores a different unit price for an existing SKU. Debatable, neither credited nor penalized."}
+  ]
+}
