@@ -1,0 +1,94 @@
+{
+  "topology": "single",
+  "agents": 1,
+  "findings": [
+    {
+      "file": "catalog/search.py",
+      "line": 27,
+      "description": "list(set(found)) throws away the order products were first found in, which the docstring promises to keep (best match for the first query first), so the result order is arbitrary and the limit cuts off arbitrary products."
+    },
+    {
+      "file": "pricing/quote.py",
+      "line": 22,
+      "description": "The VAT rate is divided by 100 before being passed to apply_vat, which expects a percentage (0-100), so 21% VAT becomes 0.21% and gross is almost equal to net."
+    },
+    {
+      "file": "pricing/discounts.py",
+      "line": 13,
+      "description": "applies_to uses > although the field comment says the discount applies to baskets of at least min_basket_cents, so a basket exactly at the threshold gets no discount."
+    },
+    {
+      "file": "reports/csv_export.py",
+      "line": 15,
+      "description": "Fields are joined with commas without any quoting, which contradicts the RFC 4180 docstring; a city or field containing a comma or quote produces broken CSV."
+    },
+    {
+      "file": "reports/daily.py",
+      "line": 19,
+      "description": "revenue // len(todays) raises ZeroDivisionError on a day with no orders, while the field comment says the average should be 0 then."
+    },
+    {
+      "file": "reports/listing.py",
+      "line": 8,
+      "description": "first_page asks for page=0 but pages are numbered from 1, so start is -size and the slice returns the newest orders (or nothing) instead of the oldest ones."
+    },
+    {
+      "file": "reports/listing.py",
+      "line": 14,
+      "description": "biggest_orders sorts the list returned by repo.all_orders() in place, even though that is the repository's own list that callers must not modify, so the repository's oldest-first order is lost."
+    },
+    {
+      "file": "shipping/eta.py",
+      "line": 13,
+      "description": "locate returns (latitude, longitude) but the result is unpacked as lon, lat, so the zone lookup uses swapped coordinates and returns a wrong zone or raises ValueError."
+    },
+    {
+      "file": "shipping/label.py",
+      "line": 21,
+      "description": "total_weight returns grams but rate_for expects kilograms, so postage is charged per gram and any parcel over 30 g raises FreightRequired."
+    },
+    {
+      "file": "util/retry.py",
+      "line": 18,
+      "description": "range(1, attempts) runs only attempts-1 calls; with attempts=1 the function never runs and 'raise last' raises None, which is a TypeError."
+    },
+    {
+      "file": "util/timeutil.py",
+      "line": 42,
+      "description": "The loop counts start and leaves out end, while the docstring says it counts days after start up to and including end; for example Friday to Saturday returns 1 instead of 0 and Saturday to Monday returns 0 instead of 1."
+    },
+    {
+      "file": "orders/service.py",
+      "line": 27,
+      "description": "geocode.locate returns None for an unknown city and the code unpacks it directly, so an unknown city raises TypeError instead of InvalidOrder (and a point outside every zone raises an uncaught ValueError)."
+    }
+  ],
+  "usage": {
+    "agents": 1,
+    "tokens": 62096,
+    "wall_clock_s": 24.8
+  },
+  "score": {
+    "found": [
+      "L1",
+      "L2",
+      "L3",
+      "L4",
+      "L5",
+      "L6",
+      "X1",
+      "X2",
+      "X3",
+      "X4",
+      "X5",
+      "X6"
+    ],
+    "missed": [],
+    "recall": 1.0,
+    "precision": 1.0,
+    "false_positives": [],
+    "duplicates": 0,
+    "bonus_found": [],
+    "cross_file_found": 6
+  }
+}
