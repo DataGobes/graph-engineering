@@ -1,0 +1,11 @@
+[project]
+name = "specgraph"
+version = "0.1.0"
+description = "Spec-driven backlog graph: planning and bookkeeping around Claude Code workflows."
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["specgraph*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
