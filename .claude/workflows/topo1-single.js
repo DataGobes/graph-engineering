@@ -15,7 +15,7 @@ const FINDINGS = {
         type: 'object',
         required: ['file', 'line', 'description'],
         properties: {
-          file: { type: 'string', description: 'path like shop/money.py' },
+          file: { type: 'string', description: 'path from the package folder, like logi/geo/zones.py' },
           line: { type: 'integer', description: '1-based line of the faulty code' },
           description: { type: 'string', description: 'one sentence: what is wrong and why' },
         },
@@ -24,11 +24,11 @@ const FINDINGS = {
   },
 }
 
-const RULES = `Report only real defects: code that misbehaves for some input, or that contradicts its own docstring or comments. No style, typing or naming remarks. Report each defect once, at the line of the faulty code. Name files as shop/<name>.py. Read only files inside the directory you are given.`
+const RULES = `Report only real defects: code that misbehaves for some input, or that contradicts its own docstring or comments. No style, typing or naming remarks. Report each defect once, at the line of the faulty code. Name each file by its path from the package folder, for example shop/money.py or logi/geo/zones.py. Read only files inside the directory you are given.`
 
 phase('Review')
 const result = await agent(
-  `Review the Python package in ${args.root} (the directory named shop) for bugs. Read every file. ${RULES}`,
+  `Review the Python package in ${args.root} for bugs. Read every file. ${RULES}`,
   { label: 'single-reviewer', phase: 'Review', schema: FINDINGS },
 )
 return { topology: 'single', agents: 1, findings: result ? result.findings : [] }

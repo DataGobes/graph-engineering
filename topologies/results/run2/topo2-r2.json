@@ -1,0 +1,102 @@
+{
+  "topology": "fanout",
+  "agents": 8,
+  "raw": 12,
+  "findings": [
+    {
+      "file": "logi/util/retry.py",
+      "line": 18,
+      "description": "range(1, attempts) runs the function only attempts-1 times instead of the documented `attempts` total; with attempts=1 it never calls fn and executes `raise None`, raising TypeError."
+    },
+    {
+      "file": "logi/util/timeutil.py",
+      "line": 41,
+      "description": "The loop counts `start` and excludes `end`, contradicting the docstring (after start, up to and including end): e.g. Saturday to Monday returns 0 instead of 1, and Friday to Saturday returns 1 instead of 0."
+    },
+    {
+      "file": "logi/catalog/search.py",
+      "line": 27,
+      "description": "list(set(found)) removes duplicates but throws away the order products were found in, so the docstring's promise that the first query's best match comes first is broken and the [:limit] cut keeps arbitrary products; an order-preserving dedup such as list(dict.fromkeys(found)) is needed."
+    },
+    {
+      "file": "logi/pricing/discounts.py",
+      "line": 13,
+      "description": "applies_to uses a strict '>' comparison, so a basket exactly equal to min_basket_cents gets no discount, which contradicts the comment that the discount applies to baskets of at least this amount."
+    },
+    {
+      "file": "logi/pricing/quote.py",
+      "line": 22,
+      "description": "The VAT rate is divided by 100 before it goes to tax.apply_vat, but apply_vat expects a percentage from 0 to 100, so NL VAT is charged at 0.21% instead of 21% and the gross amount is almost equal to the net."
+    },
+    {
+      "file": "logi/shipping/label.py",
+      "line": 21,
+      "description": "parcels.total_weight returns grams but rates.rate_for expects kilograms, so postage is computed on a weight 1000x too large and almost any parcel over 30 g wrongly raises FreightRequired."
+    },
+    {
+      "file": "logi/shipping/eta.py",
+      "line": 13,
+      "description": "geocode.locate's result is unpacked as (lon, lat) here but as (lat, lon) in label.py; one of them swaps the coordinates, and the conventional (lat, lon) order makes this one wrong, so zone_for gets latitude and longitude reversed and the transit time comes from the wrong zone."
+    },
+    {
+      "file": "logi/orders/repo.py",
+      "line": 24,
+      "description": "list_orders does not reject page < 1 even though pages are documented as numbered from 1, so page=0 or a negative page yields a negative start index and silently returns an empty or wrong slice (e.g. page=-1 returns orders from the end of the list) instead of raising like the size check does."
+    },
+    {
+      "file": "logi/orders/service.py",
+      "line": 28,
+      "description": "_COUNTRY_BY_ZONE is indexed directly, so a city whose zone code is not BENELUX/DACH/WEST raises a bare KeyError from create_order instead of an InvalidOrder, escaping the function's validation contract."
+    },
+    {
+      "file": "logi/orders/service.py",
+      "line": 30,
+      "description": "The caller's lines list is stored by reference in the Order, so later mutation of that list by the caller silently changes the stored order's lines while gross_cents stays priced for the original lines."
+    },
+    {
+      "file": "logi/reports/csv_export.py",
+      "line": 15,
+      "description": "Rows are joined with plain ',' and no field is ever quoted or escaped, contradicting the docstring's RFC 4180 claim; a city or SKU containing a comma, quote or newline (and the '; ' items field or a formatted EUR amount with a comma decimal) corrupts the CSV columns."
+    },
+    {
+      "file": "logi/reports/daily.py",
+      "line": 19,
+      "description": "average is computed as revenue // len(todays) unconditionally, so a day with no orders raises ZeroDivisionError instead of yielding average_cents 0 as the field comment promises."
+    }
+  ],
+  "usage": {
+    "agents": 8,
+    "tokens": 431180,
+    "wall_clock_s": 60.6
+  },
+  "score": {
+    "found": [
+      "L1",
+      "L2",
+      "L3",
+      "L4",
+      "L5",
+      "L6",
+      "X1",
+      "X2",
+      "X3",
+      "X4"
+    ],
+    "missed": [
+      "X5",
+      "X6"
+    ],
+    "recall": 0.83,
+    "precision": 0.91,
+    "false_positives": [
+      {
+        "file": "logi/orders/service.py",
+        "line": 30,
+        "description": "The caller's lines list is stored by reference in the Order, so later mutation of that list by the caller silently changes the stored order's lines while gross_cents stays priced for the original lines."
+      }
+    ],
+    "duplicates": 0,
+    "bonus_found": [],
+    "cross_file_found": 4
+  }
+}

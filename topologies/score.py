@@ -1,50 +1,67 @@
 """Score a topology's findings against the seeded bugs.
 
 Findings file: JSON list of {"file": "shop/x.py", "line": 12, "description": "..."}.
-A finding matches the nearest still-unmatched bug in the same file whose anchor line
-is within TOLERANCE. Each bug can be matched once; extra hits on an already-matched
-bug are duplicates (not false positives). Hits near a neutral item are ignored.
+A finding matches the nearest still-unmatched bug in the same file with an anchor line
+within TOLERANCE (a bug can list several anchors, e.g. caller and call site). Each bug can be matched once; extra hits on an already-matched
+bug are duplicates (not false positives). Hits near a neutral item are ignored; hits on a\nbonus item (a real bug we did not plant) are reported separately.
 
 Line matching is coarse: B09 and B10 sit on adjacent lines. An LLM-judge pass that
 also reads the description is planned once the runs use the API.
 """
+import argparse
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 TOLERANCE = 2
 
 
-def anchor_line(file: str, anchor: str) -> int:
-    lines = (ROOT / "target" / file).read_text().splitlines()
+def anchor_line(target: str, file: str, anchor: str) -> int:
+    lines = (ROOT / target / file).read_text().splitlines()
     hits = [i + 1 for i, text in enumerate(lines) if anchor in text]
     if len(hits) != 1:
         raise ValueError(f"anchor {anchor!r} in {file} matched {len(hits)} lines")
     return hits[0]
 
 
-def load_truth():
-    data = json.loads((ROOT / "ground_truth.json").read_text())
+def load_truth(truth_file: str = "ground_truth.json"):
+    """Bugs and neutral items, each with `lines`: the lines of all its anchors."""
+    data = json.loads((ROOT / truth_file).read_text())
+    target = data.get("target", "target")
     for item in data["bugs"] + data["neutral"]:
-        item["line"] = anchor_line(item["file"], item["anchor"])
-    return data["bugs"], data["neutral"]
+        anchors = item.get("anchors") or [item["anchor"]]
+        item["lines"] = [anchor_line(target, item["file"], a) for a in anchors]
+    for item in data.get("bonus", []):
+        item["lines"] = [anchor_line(target, item["file"], a) for a in item["anchors"]]
+    return data["bugs"], data["neutral"], data.get("bonus", [])
+
+
+def distance(finding, item) -> int:
+    return min(abs(int(finding["line"]) - line) for line in item["lines"])
+
+
+def same_file(reported: str, truth: str) -> bool:
+    """Agents sometimes drop the package folder (geo/zones.py for logi/geo/zones.py)."""
+    a, b = reported.strip("/").split("/"), truth.split("/")
+    return a == b[-len(a):] if len(a) <= len(b) else False
 
 
 def near(finding, item) -> bool:
-    return finding["file"] == item["file"] and abs(int(finding["line"]) - item["line"]) <= TOLERANCE
+    return same_file(finding["file"], item["file"]) and distance(finding, item) <= TOLERANCE
 
 
-def score(findings: list[dict]) -> dict:
-    bugs, neutral = load_truth()
-    found, duplicates, false_positives = {}, 0, []
+def score(findings: list[dict], truth_file: str = "ground_truth.json") -> dict:
+    bugs, neutral, bonus = load_truth(truth_file)
+    found, duplicates, false_positives, bonus_found = {}, 0, [], set()
     for f in findings:
-        candidates = sorted((b for b in bugs if near(f, b)), key=lambda b: abs(int(f["line"]) - b["line"]))
+        candidates = sorted((b for b in bugs if near(f, b)), key=lambda b: distance(f, b))
         bug = next((b for b in candidates if b["id"] not in found), None)
         if bug:
             found[bug["id"]] = f
         elif candidates:
             duplicates += 1
+        elif extra := next((b for b in bonus if near(f, b)), None):
+            bonus_found.add(extra["id"])
         elif not any(near(f, n) for n in neutral):
             false_positives.append(f)
     tp = len(found)
@@ -56,9 +73,14 @@ def score(findings: list[dict]) -> dict:
         "precision": round(tp / reported, 2) if reported else 0.0,
         "false_positives": false_positives,
         "duplicates": duplicates,
+        "bonus_found": sorted(bonus_found),
         "cross_file_found": sum(1 for b in bugs if b["kind"] == "cross-file" and b["id"] in found),
     }
 
 
 if __name__ == "__main__":
-    print(json.dumps(score(json.loads(Path(sys.argv[1]).read_text())), indent=2))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("findings")
+    parser.add_argument("--truth", default="ground_truth.json")
+    args = parser.parse_args()
+    print(json.dumps(score(json.loads(Path(args.findings).read_text()), args.truth), indent=2))
